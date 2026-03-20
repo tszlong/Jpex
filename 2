@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="zh-Hant-HK">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>JPEX 苦主模擬器 (修復版)</title>
+  <style>
+    /* --- 1. 核心樣式 --- */
+    :root {
+      --bg-color: #000000;
+      --jpex-green: #00ffb2;
+      --text-white: #ffffff;
+      --msg-in: #1a1a1a;
+      --msg-out: #004d36;
+      --danger: #ff3b30;
+    }
+
+    body {
+      margin: 0; background: var(--bg-color); color: var(--text-white);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang HK", sans-serif;
+      display: flex; justify-content: center; align-items: center; height: 100vh;
+      overflow: hidden;
+      background-image: radial-gradient(circle, rgba(0, 255, 178, 0.05) 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+
+    /* 手機容器 */
+    #phone {
+      width: 100%; max-width: 420px; height: 100%; max-height: 900px;
+      background: rgba(20, 20, 20, 0.95); position: relative;
+      display: flex; flex-direction: column; overflow: hidden;
+      box-shadow: 0 0 30px rgba(0, 255, 178, 0.2);
+    }
+    
+    @media (min-width: 450px) {
+      #phone { height: 90vh; border-radius: 20px; border: 2px solid #333; }
+    }
+
+    /* 頂部 */
+    #header {
+      padding: 15px; border-bottom: 1px solid #333;
+      display: flex; justify-content: space-between; align-items: center;
+      background: rgba(0,0,0,0.9); z-index: 10;
+    }
+    .logo { font-weight: 900; font-style: italic; font-size: 20px; color: var(--jpex-green); letter-spacing: 1px; }
+
+    /* 聊天區 */
+    #chat-area {
+      flex: 1; padding: 20px 16px; overflow-y: auto;
+      display: flex; flex-direction: column; gap: 15px;
+      scroll-behavior: smooth;
+    }
+
+    .msg {
+      max-width: 85%; padding: 12px 14px; border-radius: 10px;
+      font-size: 15px; line-height: 1.5; word-wrap: break-word;
+      animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    @keyframes popIn { from{transform:scale(0.9); opacity:0;} to{transform:scale(1); opacity:1;} }
+
+    .msg.in { align-self: flex-start; background: var(--msg-in); color: #ddd; border: 1px solid #333; border-bottom-left-radius: 0; }
+    .msg.out { align-self: flex-end; background: var(--msg-out); color: #fff; border: 1px solid var(--jpex-green); border-bottom-right-radius: 0; }
+    
+    .npc-name { font-size: 11px; color: var(--jpex-green); margin-bottom: 4px; font-weight: bold; }
+
+    /* 底部按鈕區 */
+    #footer {
+      padding: 15px; background: #000; border-top: 1px solid #333;
+      display: flex; flex-direction: column; gap: 10px; min-height: 80px;
+    }
+    .btn-choice {
+      background: #111; color: #fff; border: 1px solid #444;
+      padding: 12px; border-radius: 8px; text-align: left; cursor: pointer;
+      font-size: 15px; display: flex; align-items: center; gap: 10px;
+    }
+    .btn-choice:active { background: #003324; border-color: var(--jpex-green); }
+
+    /* --- 開始/結束遮罩 (關鍵修復: z-index 設為最高) --- */
+    #overlay {
+      position: absolute; inset: 0; background: #000; z-index: 9999;
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      padding: 30px; text-align: center; transition: opacity 0.5s;
+    }
+    
+    .big-logo {
+      font-size: 50px; font-weight: 900; font-style: italic; color: #000;
+      -webkit-text-stroke: 2px var(--jpex-green); margin-bottom: 5px;
+    }
+    
+    input[type="text"] {
+      background: #111; border: 1px solid var(--jpex-green); color: var(--jpex-green);
+      padding: 12px; font-size: 18px; text-align: center; border-radius: 6px;
+      margin: 20px 0; width: 100%; max-width: 250px; outline: none;
+    }
+
+    .btn-start {
+      background: var(--jpex-green); color: #000; font-weight: 800; border: none;
+      padding: 15px 50px; font-size: 18px; border-radius: 50px; cursor: pointer;
+      box-shadow: 0 0 20px rgba(0, 255, 178, 0.4);
+      /* 確保按鈕可點擊 */
+      position: relative; z-index: 10000; 
+    }
+    .btn-start:active { transform: scale(0.95); }
+
+    #cert-canvas { display: none; }
+  </style>
+</head>
+<body>
+
+<div id="phone">
+  <!-- 頂部 -->
+  <div id="header">
+    <div class="logo">JPEX <span style="font-size:12px; font-weight:normal; color:#fff;">| VIP</span></div>
+    <div style="font-family:monospace; color:var(--jpex-green);">JPC $0.024</div>
+  </div>
+
+  <!-- 聊天 -->
+  <div id="chat-area"></div>
+
+  <!-- 底部 -->
+  <div id="footer"></div>
+
+  <!-- 開始畫面 (修復版) -->
+  <div id="overlay">
+    <div class="big-logo">JPEX</div>
+    <p style="color:#888; letter-spacing:2px; font-size:12px;">ASIA'S NO.1 EXCHANGE</p>
+    
+    <div style="height:30px;"></div>
+    
+    <p style="font-size:15px; margin-bottom:10px;">請輸入用戶名稱：</p>
+    <input type="text" id="username" placeholder="e.g. Kelvin" maxlength="10">
+    
+    <!-- 直接綁定 onclick，最穩定的做法 -->
+    <button class="btn-start" onclick="startGame()">立即註冊</button>
+  </div>
+</div>
+
+<canvas id="cert-canvas" width="800" height="600"></canvas>
+
+<script>
+  // --- 變數 ---
+  let playerName = "Kelvin";
+  let score = 100;
+  const chatArea = document.getElementById('chat-area');
+  const footer = document.getElementById('footer');
+  const overlay = document.getElementById('overlay');
+
+  // --- 劇本 (廣東話) ---
+  const SCRIPT = [
+    {
+      npc: "Eric (舊同學)",
+      msgs: [
+        { type: 'text', side: 'in', text: '喂！好耐無見。👋' },
+        { type: 'text', side: 'in', text: '見你最近好似想搵快錢？我有路數喎。😏' },
+        { type: 'img', side: 'in', html: '<div style="padding:15px; text-align:center; background:#000;"><div style="color:#00ffb2; font-size:32px; font-weight:bold;">+45.2%</div><div style="font-size:12px; color:#666;">今日收益 (JPC)</div></div>' },
+        { type: 'text', side: 'in', text: '睇下？我跟個「幣圈大師」玩咗幾日，日日都賺緊錢！' }
+      ],
+      choices: [
+        { text: '咁誇張？幾日賺四成？小心係騙局喎。', val: 10, next: 1 },
+        { text: '嘩！真定假呀？快啲帶我玩！', val: -10, next: 1 }
+      ]
+    },
+    {
+      npc: "Eric (舊同學)",
+      msgs: [
+        { type: 'text', side: 'in', text: '你唔信？呢間 JPEX 喺港鐵站都有大廣告架！🚇' },
+        { type: 'text', side: 'in', text: '連明星都有宣傳，又有日本牌照，點會係假？' },
+        { type: 'text', side: 'in', text: '你自己去尖沙咀啲 OTC 找換店睇下，成條街都係佢哋分店啦。' }
+      ],
+      choices: [
+        { text: '明星代言唔代表無事，FTX 夠有廣告啦。', val: 10, next: 2 },
+        { text: '又係喎，咁大間公司應該穩陣，試下囉。', val: -10, next: 2 }
+      ]
+    },
+    {
+      npc: "客服 Alice",
+      msgs: [
+        { type: 'sys', text: '⚠️ Eric 邀請你加入「財富自由 VIP 群」' },
+        { type: 'text', side: 'in', text: 'Hello！我係你嘅專屬客服 Alice。👩‍💼' },
+        { type: 'text', side: 'in', text: '恭喜你！而家註冊 JPEX-VIP 戶口，即送 100 USDT 迎新獎賞。' },
+        { type: 'link', side: 'in', text: 'jpex-vip-hk888.com' },
+        { type: 'text', side: 'in', text: '記住用呢條 Link 呀，官方嗰個有時會塞車入唔到架。' }
+      ],
+      choices: [
+        { text: '個網址咁怪嘅？唔係 .com 官方網咩？', val: 10, next: 3 },
+        { text: '有錢送？咁我快啲開戶先！', val: -10, next: 3 }
+      ]
+    },
+    {
+      npc: "客服 Alice",
+      msgs: [
+        { type: 'sys', text: '📅 一個月後...' },
+        { type: 'text', side: 'in', text: '🔥 緊急通知：平台推出「JPC 質押閃電戰」！' },
+        { type: 'img', side: 'in', html: '<div style="padding:10px; background:#111; border:1px solid #333;"><div style="color:#fff;">年化回報 (APY)</div><div style="font-size:28px; color:#ff3b30; font-weight:bold;">1900%</div><div style="font-size:12px; color:#666;">限時 24 小時</div></div>' },
+        { type: 'text', side: 'in', text: '只要入金 10 萬，七日後連本帶利拎走 15 萬！名額得番最後 5 個咋！' }
+      ],
+      choices: [
+        { text: '1900% 息？高利貸都無咁高，肯定係龐氏騙局。', val: 10, next: 4 },
+        { text: '正呀！我即刻去財務公司借錢入金！', val: -20, next: 4 }
+      ]
+    },
+    {
+      npc: "客服 Alice",
+      msgs: [
+        { type: 'sys', text: '❌ 錯誤：提款失敗 (Error: 9091)' },
+        { type: 'text', side: 'in', text: '先生，唔好意思。系統 Check 到你個戶口有「洗黑錢風險」。🛑' },
+        { type: 'text', side: 'in', text: '根據合規要求，你需要交 30% 「保證金」證明你啲錢係乾淨嘅，先可以解凍。' }
+      ],
+      choices: [
+        { text: '當我傻仔咩？典型殺豬盤話術！我唔會比錢！', val: 10, next: 99 },
+        { text: '嚇？會唔會坐監架？好啦我比錢解凍先。', val: -30, next: 99 }
+      ]
+    }
+  ];
+
+  // --- 核心功能 (修復版) ---
+  
+  function startGame() {
+    // 1. 獲取名字
+    const nameInput = document.getElementById('username');
+    if (nameInput.value.trim() !== "") {
+      playerName = nameInput.value.trim();
+    }
+    
+    // 2. 隱藏遮罩
+    overlay.style.opacity = '0';
+    setTimeout(() => {
+      overlay.style.display = 'none';
+      playLevel(0); // 開始第一關
+    }, 500);
+  }
+
+  async function playLevel(idx) {
+    if (idx === 99) {
+      showEnding();
+      return;
+    }
+    
+    const level = SCRIPT[idx];
+    footer.innerHTML = ''; // 清空選項
+    
+    // 逐條顯示訊息
+    for (let item of level.msgs) {
+      await wait(800);
+      renderMessage(item, level.npc);
+      chatArea.scrollTop = chatArea.scrollHeight;
+    }
+    
+    // 顯示選項按鈕
+    level.choices.forEach(c => {
+      const btn = document.createElement('div');
+      btn.className = 'btn-choice';
+      btn.innerHTML = `<span style="font-size:18px;">${c.val > 0 ? '🤔' : '🤑'}</span> ${c.text}`;
+      btn.onclick = () => {
+        // 顯示玩家回答
+        renderMessage({type:'text', side:'out', text: c.text});
+        
+        // 更新分數
+        score += c.val;
+        score = Math.max(0, Math.min(100, score));
+        
+        // 清空並進入下一關
+        footer.innerHTML = '';
+        setTimeout(() => playLevel(c.next), 500);
+      };
+      footer.appendChild(btn);
+    });
+    chatArea.scrollTop = chatArea.scrollHeight;
+  }
+
+  function renderMessage(msg, npcName) {
+    const div = document.createElement('div');
+    
+    if (msg.type === 'sys') {
+      div.style.cssText = 'align-self:center; background:rgba(255,50,50,0.1); color:#ff3b30; border:1px solid #ff3b30; padding:5px 12px; font-size:12px; border-radius:4px; margin:10px 0;';
+      div.textContent = msg.text;
+    } else {
+      div.className = `msg ${msg.side}`;
+      
+      let html = '';
+      if (msg.side === 'in') html += `<div class="npc-name">${npcName}</div>`;
+      
+      if (msg.type === 'text') html += msg.text;
+      else if (msg.type === 'img') html += `<div style="margin-top:5px; border-radius:6px; overflow:hidden;">${msg.html}</div>`;
+      else if (msg.type === 'link') html += `<div style="color:#00ffb2; text-decoration:underline; margin-top:5px;">🔗 ${msg.text}</div>`;
+      
+      div.innerHTML = html;
+    }
+    chatArea.appendChild(div);
+  }
+
+  function showEnding() {
+    overlay.style.display = 'flex';
+    setTimeout(() => overlay.style.opacity = '1', 50);
+    
+    const isWin = score >= 60;
+    const title = isWin ? "成功避劫！" : "血本無歸";
+    const color = isWin ? "#00ffb2" : "#ff3b30";
+    
+    overlay.innerHTML = `
+      <h1 style="color:${color}; font-size:40px; margin-bottom:10px;">${title}</h1>
+      <p style="color:#fff; font-size:18px;">玩家：<span style="color:#00ffb2">${playerName}</span></p>
+      <p style="color:#fff; font-size:18px;">資產剩餘：${score}%</p>
+      <p style="color:#888; font-size:14px; margin:20px 0; max-width:280px; line-height:1.5;">
+        ${isWin ? '好彩你夠清醒！面對高息引誘都無動搖，成功保住血汗錢。' : '你成為咗典型的「JPEX 苦主」。記住：高回報一定有伏，阿 Sir 唔會問你攞密碼！'}
+      </p>
+      <button class="btn-start" onclick="downloadCert('${title}')" style="background:transparent; border:1px solid ${color}; color:${color}; margin-bottom:15px;">下載警世證書</button>
+      <button class="btn-start" onclick="location.reload()">再玩一次</button>
+    `;
+  }
+
+  function downloadCert(title) {
+    const cvs = document.getElementById('cert-canvas');
+    const ctx = cvs.getContext('2d');
+    
+    // 繪圖
+    ctx.fillStyle = "#000"; ctx.fillRect(0,0,800,600);
+    ctx.strokeStyle = "#00ffb2"; ctx.lineWidth=15; ctx.strokeRect(20,20,760,560);
+    
+    ctx.fillStyle = "#fff"; ctx.textAlign="center";
+    ctx.font = "bold 40px sans-serif"; ctx.fillText("JPEX 苦主模擬器", 400, 100);
+    ctx.font = "30px sans-serif"; ctx.fillStyle="#aaa"; ctx.fillText("結業證書", 400, 160);
+    
+    ctx.font = "bold 60px sans-serif"; ctx.fillStyle="#00ffb2"; ctx.fillText(playerName, 400, 260);
+    
+    ctx.font = "bold 50px sans-serif"; 
+    ctx.fillStyle = score >= 60 ? "#00ffb2" : "#ff3b30";
+    ctx.fillText(title, 400, 360);
+    
+    ctx.font = "24px sans-serif"; ctx.fillStyle="#fff"; ctx.fillText(`資產剩餘：${score}%`, 400, 440);
+    ctx.font = "18px sans-serif"; ctx.fillStyle="#666"; ctx.fillText(new Date().toLocaleDateString(), 400, 540);
+    
+    // 下載
+    try {
+      const link = document.createElement('a');
+      link.download = `JPEX_${playerName}.png`;
+      link.href = cvs.toDataURL();
+      link.click();
+    } catch(e) {
+      alert('下載功能受限，請直接截圖保存！');
+    }
+  }
+
+  function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
+</script>
+
+</body>
+</html>
